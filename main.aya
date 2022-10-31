@@ -1,0 +1,36 @@
+import ::canvas
+import ::matrix
+"utils\\interactive_ui" importlib.import
+"scenes\\mode_select" importlib.import
+"scenes\\pin_finder" importlib.import
+"scenes\\game_end" importlib.import
+"scenes\\single_pin_picking" importlib.import
+
+600 :canvas_width;
+400 :canvas_height;
+30  :fps;
+
+1fps/:dt;
+1000fps/:dt_ms;
+
+{,
+	"LockPick" :name
+	canvas_width :width
+	canvas_height :height
+	1 :scale
+} canvas! :_canvas;
+1 _canvas.set_alpha
+_canvas.show
+500 :Z
+
+{
+	mode_select
+	_canvas.isopen ! { "Canvas closed!".D }?
+	pin_finder
+	_canvas.isopen ! { "Canvas closed!".D }?
+	single_pin_picking
+	_canvas.isopen ! { "Canvas closed!".D }?
+	game_end
+	
+	_canvas.isopen
+}W

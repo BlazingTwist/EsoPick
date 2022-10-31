@@ -1,0 +1,22 @@
+{
+
+.{
+	Mode select UI
+.}
+30 26 43 1 _canvas.id :{graphics.set_color_alpha} .# ui background
+0 0 canvas_width canvas_height 1 _canvas.id :{graphics.rect}
+0 0 canvas_height canvas_width _canvas interactive_ui! :ui;
+{,30:size;}ui_style! 0 0 ui.set_button_style
+"Easy Mode" 10 :3 210 120 180 60 10 {event, 1:easy_mode; 0:awaiting_mode_button;} ui.button
+"Hard Mode" 10 :3 210 220 180 60 10 {event, 0:easy_mode; 0:awaiting_mode_button;} ui.button
+_canvas.show
+1:awaiting_mode_button;
+{
+	_canvas.id :{graphics.click_events} ui.check_buttons
+	30:Z
+	_canvas.isopen awaiting_mode_button &
+}W
+dt_ms:Z
+
+}:mode_select;
+export ::mode_select

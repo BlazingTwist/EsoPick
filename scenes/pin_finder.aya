@@ -1,0 +1,334 @@
+{
+
+.{
+	Pin Finding Mode
+.}
+[300 250] :keyway_root;
+40 :keyway_height;
+140 :keyway_depth;
+
+30 26 43 1 _canvas.id :{graphics.set_color_alpha} .# ui background
+0 0 canvas_width canvas_height 1 _canvas.id :{graphics.rect}
+0 0 250 250 _canvas interactive_ui! :ui;
+"Step 1: Find Key-Pins" 10 35 ui.header
+"Move your lockpick with arrow keys" 20 60 ui.text
+"Mark found key-pins with 'X'" 20 85 ui.text
+"Submit founds" 10 :2 20 100 125 25 5 {event, verify_pin_submission} ui.button
+
+50:alert_safe_zone;
+
+1:level_incomplete;
+
+{
+	30 26 43 1 _canvas.id :{graphics.set_color_alpha}
+	250 0 canvas_width 250 - canvas_height alert_safe_zone- 1 _canvas.id :{graphics.rect} .# avoid ui safe-zone
+	0 200 canvas_width canvas_height (200 alert_safe_zone+) - 1 _canvas.id :{graphics.rect}
+}:draw_background;
+
+{
+	30 26 43 1 _canvas.id :{graphics.set_color_alpha}
+	0 (canvas_height alert_safe_zone-) canvas_width alert_safe_zone 1 _canvas.id :{graphics.rect}
+}:clear_alert;
+
+{text x_offset,
+	clear_alert
+	text x_offset (canvas_height alert_safe_zone- 25+) ui.alert
+}:write_alert;
+
+{text x_offset,
+	{,20:size; 249:r; 220:g; 92:b;}ui_style! ui.set_alert_style
+	clear_alert
+	text x_offset (canvas_height alert_safe_zone- 25+) ui.alert
+}:write_succes;
+
+{
+	1:is_valid;
+	0:alert_params;
+	
+	[]:matched_pins;
+	key_pin_lines :# {line_x,
+		0:line_is_valid;
+		0:matching_pin;
+		key_pins :# {pin,
+			(line_x pick_head_radius_x-) pin.start_x :> (line_x pick_head_radius_x+) (pin.start_x pin.width+) :< & {
+				1:line_is_valid;
+				pin:matching_pin;
+			}?
+		};
+		line_is_valid {
+			matched_pins matching_pin M# N 0 :> {
+				0:is_valid;
+				["You marked the same pin twice!" 150] :alert_params;
+			}{
+				matching_pin M# matched_pins .B;
+			}.?
+		}{
+			0:is_valid;
+			["At least one marker is not on a pin!" 130] :alert_params;
+		}.?
+	};
+	
+	is_valid { .# valid so far, check line counts against pin count
+		key_pin_lines E key_pins E = {
+			"Well done, you possess basic motor skills." 90 write_succes
+			0:level_incomplete;
+		}{
+			"Looks good, but you're missing some pins!" 90 write_alert
+		}.?
+	}{ .# invalid, alert user
+		alert_params~ write_alert
+	}.?
+}:verify_pin_submission;
+
+{x y,
+	250 222 128 1 _canvas.id :{graphics.set_color_alpha}
+	x300+ y200+ 200 100 10 :& 1 _canvas.id :{graphics.round_rect}
+	x320+ y135+ 130 75 5 :& 1 _canvas.id :{graphics.round_rect}
+}:draw_lock_body;
+
+class explorable
+	def explorable::__init__ {start_x start_y width height chunks_x chunks_y self,
+		start_x 							self.:start_x;
+		start_y 							self.:start_y;
+		width 								self.:width;
+		height 								self.:height;
+		chunks_x 							self.:chunks_x;
+		chunks_y 							self.:chunks_y;
+		([chunks_y chunks_x] matrix.zeros) 	self.:exploration;
+		width chunks_x / ./ 				self.:chunk_size_x;
+		height chunks_y / ./ 				self.:chunk_size_y;
+	}
+	
+	.# make sure that your height is divisible by chunks_y
+	def explorable::construct_for_keyway {start_x start_y height chunks_y target_width self : chunks_x,
+		chunks_y target_width height .% * :chunks_x;
+		target_width chunks_x / ./ chunks_x * :target_width;
+		
+		start_x start_y target_width height chunks_x chunks_y self!
+	}
+	
+	def explorable::construct_for_pin { start_x start_y width self : tmp_height tmp_start_y,
+		width 3* :tmp_height;
+		start_y tmp_height - :tmp_start_y;
+		
+		start_x tmp_start_y width tmp_height 2 6 self!
+	}
+	
+	def explorable::draw_exploration {_canvas self : sx sy csx csy ncx ncy,
+		self.start_x :sx;
+		self.start_y :sy;
+		self.chunk_size_x: csx;
+		self.chunk_size_y: csy;
+		self.chunks_x :ncx;
+		self.chunks_y :ncy;
+		[ [ncx.R {:&} ncy 1-%]   [ncy.R {:&} ncx 1-%].T   self.exploration.rows ]
+		.T:#{.T:#{~ :expl; :y; :x;
+			expl {
+				(sx (x csx*)+) (sy (y csy*)+) csx csy 1 _canvas.id :{graphics.rect}
+			}?
+		}};
+	}
+	
+	def explorable::update_exploration {bounds_arr self,
+		bounds_arr.[0] self.start_x - pick_position.[0] + :relative_bound_start_x;
+		relative_bound_start_x bounds_arr.[2] + :relative_bound_end_x;
+		relative_bound_start_x self.chunk_size_x .% 0.< self.chunks_x.> :first_cell_x;
+		relative_bound_end_x self.chunk_size_x .% 0.< self.chunks_x.> 1- :last_cell_x;
+		
+		bounds_arr.[1] self.start_y - pick_position.[1] + :relative_bound_start_y;
+		relative_bound_start_y bounds_arr.[3] + :relative_bound_end_y;
+		relative_bound_start_y self.chunk_size_y .% 0.< self.chunks_y.> :first_cell_y;
+		relative_bound_end_y self.chunk_size_y .% 0.< self.chunks_y.> 1- :last_cell_y;
+		
+		last_cell_x first_cell_x :> last_cell_y first_cell_y :> & {
+			[first_cell_x last_cell_x]R [first_cell_y last_cell_y]R {x y,
+				1 self.exploration.rows.[y].:[x];
+			}:*;
+		}?
+	}
+	
+	def explorable::__repr__ {self,
+		"(bounds[$(self.start_x) $(self.start_y) $(self.width) $(self.height)] , chunks[$(self.chunks_x) $(self.chunks_y) $(self.chunk_size_x) $(self.chunk_size_y)])"
+	}
+
+keyway_root~ keyway_height 10 keyway_depth explorable.construct_for_keyway :keyway_exploration;
+keyway_exploration.width :keyway_depth;
+
+12 :pin_gap;
+14 :pin_width;
+keyway_root.[0] :prev_pin_gen_x;
+5.R:#{i,
+	prev_pin_gen_x pin_gap+ pin_width+ :prev_pin_gen_x
+	keyway_root.[1]
+	pin_width explorable.construct_for_pin
+}:key_pins;
+
+{
+	89 71 41 1 _canvas.id :{graphics.set_color_alpha}
+	keyway_root~ 10 keyway_height 1 _canvas.id :{graphics.rect}
+}:draw_keyway;
+
+{
+	_canvas keyway_exploration.draw_exploration
+	key_pins:#{pin, _canvas pin.draw_exploration};
+}:draw_exploration
+
+[] :key_pin_lines;
+{
+	115 171 132 1 _canvas.id :{graphics.set_color_alpha}
+	canvas_height 0.125 * :line_start;
+	canvas_height 0.875 * :line_end;
+	10.R :lines_range;
+	line_end line_start - 10 / :line_length;
+	line_length 0.8* :stroke_length;
+	key_pin_lines :# {x_pos, lines_range :# {i,
+		(x_pos) (line_start (line_length i*)+) (1) (stroke_length) 1 _canvas.id :{graphics.rect}
+	};};
+}:draw_key_pin_lines;
+
+{
+	(pick_position.[0] pick_head_center_x+) :cur_pick_center;
+	:1 :remove_index;
+	key_pin_lines E 0 > {
+		[(key_pin_lines E .R) (key_pin_lines)] .T :# {~ :line_x; :index;
+			(cur_pick_center line_x -) .| pick_head_radius_x :< {
+				index :remove_index;
+			}?
+		};
+	}?
+
+	remove_index 0 :> {
+		key_pin_lines remove_index .-;
+	}{
+		cur_pick_center key_pin_lines .B;
+	}.?
+}:add_or_delete_pin_line;
+
+.# hard coded values, must copy these to '::draw_lock_pick' manually
+[110 275 195 10]:pick_bounds_neck;
+[295 255 10 25]:pick_bounds_head;
+300:pick_head_center_x;
+5:pick_head_radius_x;
+255:pick_head_max_y;
+{x y,
+	196 181 172 1 _canvas.id :{graphics.set_color_alpha}
+	x50- y255+ 190 50 50 :& 1 _canvas.id :{graphics.round_rect}
+	x110+ y275+ 195 10 10 :& 1 _canvas.id :{graphics.round_rect}
+	x295+ y255+ 10 25 1 _canvas.id :{graphics.rect}
+}:draw_lock_pick;
+
+{dx dy,	
+	[pick_bounds_neck pick_bounds_head] :# {bounds,
+		bounds keyway_exploration.update_exploration
+		key_pins :# {pin, bounds pin.update_exploration};
+	};
+}:update_exploration;
+
+{,
+	{pos_change_x 30 dt * + :pos_change_x;} :"RIGHT";
+	{pos_change_x 30 dt * - :pos_change_x;} :"LEFT";
+	{pos_change_y 30 dt * + :pos_change_y;} :"DOWN";
+	{pos_change_y 30 dt * - :pos_change_y;} :"UP";
+}:key_map;
+
+class key_listener
+	def key_listener::__init__ {key_name::str action::block self,
+		0 self.:is_pressed;
+		key_name self.:key_name;
+		action.` self.:action;
+	}
+	
+	def key_listener::update {pressed_key_names::list self,
+		pressed_key_names self.key_name N 0 < {
+			0 self.:is_pressed;
+		}{
+			self.is_pressed ! { self.action }?
+			1 self.:is_pressed;
+		}.?
+	}
+[
+	"X" {add_or_delete_pin_line} key_listener!
+]:key_listeners;
+	
+
+[0 0] :pick_position;
+keyway_root.[1] keyway_height+ 285- :max_pick_y;
+keyway_root.[1] 255- :min_pick_y_core;
+keyway_root.[1] 275- :min_pick_y_pin;
+{
+	draw_background
+	easy_mode {
+		(0 0 draw_lock_body) (draw_keyway) (draw_exploration) (draw_key_pin_lines) (pick_position~ draw_lock_pick)
+	} {
+		(pick_position~ draw_lock_pick) (0 0 draw_lock_body) (draw_key_pin_lines)
+	}.?
+	_canvas.show
+
+	_canvas.id :{graphics.click_events} ui.check_buttons
+
+	0 :pos_change_x;
+	0 :pos_change_y;
+	[] :key_names;
+	_canvas.id :{graphics.pressed_keys} :& E 0> {keys,
+		keys :# {key,
+			key.key_name key_names .B;
+			key_map key.key_name {}.I~
+		};
+	}{;}.?
+	key_listeners :# {listener, key_names listener.update};
+	
+	pos_change_x 0=! pos_change_y 0=! | {
+		pick_position~ :cur_y; :cur_x;
+		
+		pick_head_center_x cur_x + :cur_pick_center;
+		0 :target_pin;
+		(cur_pick_center keyway_root.[0] >) { .# if pick is in keyway -> find current pin-hole
+			key_pins :# {pin,
+				(cur_pick_center pick_head_radius_x-) pin.start_x :> (cur_pick_center pick_head_radius_x+) (pin.start_x pin.width+) :< & {
+					pin :target_pin;
+				}?
+			}
+		}?
+		
+		pos_change_x 0=!{
+			250 :min_x;
+			keyway_depth keyway_root.[0]+ :max_x;
+			
+			(pick_head_max_y cur_y+ keyway_root.[1] <) (target_pin 0=!) & { .# if pick is in pin-hole -> lock movement to hole
+				min_x (target_pin.start_x) .< :min_x;
+				max_x (target_pin.start_x target_pin.width+) .> :max_x;
+			}?
+			
+			cur_pick_center pos_change_x+ pick_head_radius_x+ max_x > {
+				max_x (cur_pick_center pick_head_radius_x+) - :pos_change_x;
+			}?
+			cur_pick_center pos_change_x+ pick_head_radius_x- min_x < {
+				min_x (cur_pick_center pick_head_radius_x-) - :pos_change_x;
+			}?
+			cur_x pos_change_x+ pick_position.:[0];
+		}?
+		
+		pos_change_y 0=!{
+			target_pin 0= {min_pick_y_core}{min_pick_y_pin}.? :min_y;
+			max_pick_y :max_y;
+		
+			cur_y pos_change_y+ max_y> {
+				max_y cur_y- :pos_change_y;
+			}?
+			cur_y pos_change_y+ min_y< {
+				min_y cur_y- :pos_change_y;
+			}?
+			cur_y pos_change_y+ pick_position.:[1];
+		}?
+		
+		pos_change_x 0=! pos_change_y 0=! |{ pos_change_x pos_change_y update_exploration }?
+	}?
+	
+	dt_ms:Z
+	_canvas.isopen level_incomplete &
+}W 
+
+_canvas.isopen {_canvas.show 1000:Z}?
+
+}:pin_finder;
+export ::pin_finder

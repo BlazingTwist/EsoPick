@@ -1,0 +1,206 @@
+{
+
+.{
+	Single Pin Picking
+.}
+[300 250] :keyway_root;
+40 :keyway_height;
+140 :keyway_depth;
+
+30 26 43 1 _canvas.id :{graphics.set_color_alpha} .# ui background
+0 0 canvas_width canvas_height 1 _canvas.id :{graphics.rect}
+0 0 250 250 _canvas interactive_ui! :ui;
+{,20:size; 249:r; 220:g; 92:b;}ui_style! ui.set_alert_style
+"Step 2: Picking" 10 35 ui.header
+"Use <-> arrows to select pin" 20 60 ui.text
+"Press arrow up to lift pin" 20 85 ui.text
+"Bottom bar shows pin resistance" 20 110 ui.text
+"Restart" 10 :2 20 125 75 25 5 {event, restart} ui.button
+
+50:alert_safe_zone;
+
+1:level_incomplete;
+
+{
+	30 26 43 1 _canvas.id :{graphics.set_color_alpha}
+	(250) (alert_safe_zone) (canvas_width 250 -) (canvas_height alert_safe_zone2*-) 1 _canvas.id :{graphics.rect}
+	(0) (200) (canvas_width) (canvas_height (200 alert_safe_zone+)-) 1 _canvas.id :{graphics.rect}
+}:draw_background;
+
+{
+	30 26 43 1 _canvas.id :{graphics.set_color_alpha}
+	250 0 (canvas_width 250-) alert_safe_zone 1 _canvas.id :{graphics.rect}
+}:clear_alert;
+
+:1 :alert_timeout_ms;
+{text x_offset timeout_ms,
+	clear_alert
+	timeout_ms :alert_timeout_ms;
+	text (x_offset 250+) 25 ui.alert
+}:write_alert;
+
+{x y,
+	250 222 128 1 _canvas.id :{graphics.set_color_alpha}
+	x300+ y200+ 200 100 10 :& 1 _canvas.id :{graphics.round_rect}
+	x320+ y135+ 130 75 5 :& 1 _canvas.id :{graphics.round_rect}
+}:draw_lock_body;
+
+10 keyway_depth keyway_height .% * :chunks_x;
+keyway_depth chunks_x /./ chunks_x * :keyway_depth;
+
+12 :pin_gap;
+14 :pin_width;
+keyway_root.[0] :prev_pin_gen_x;
+5.R:#{i,
+	prev_pin_gen_x pin_gap+ pin_width+ :prev_pin_gen_x;
+	pin_width 3* :_height;
+	[prev_pin_gen_x (keyway_root.[1] _height-) pin_width _height]
+}:key_pins;
+key_pins:#{pin, pin.[0] (pin.[2] 0.5*)+ }:key_pin_centers_x;
+0:current_pin_index;
+
+{
+	89 71 41 1 _canvas.id :{graphics.set_color_alpha}
+	keyway_root~ 10 keyway_height 1 _canvas.id :{graphics.rect}
+	keyway_root~ keyway_depth keyway_height 1 _canvas.id :{graphics.rect}
+	key_pins :# {pin, pin ~ 1 _canvas.id :{graphics.rect}};
+}:draw_keyway;
+
+[0 0] :pick_position;
+300:pick_head_center_x;
+{x y,
+	196 181 172 1 _canvas.id :{graphics.set_color_alpha}
+	x50- y255+ 190 50 50 :& 1 _canvas.id :{graphics.round_rect}
+	x110+ y275+ 195 10 10 :& 1 _canvas.id :{graphics.round_rect}
+	x295+ y255+ 10 25 1 _canvas.id :{graphics.rect}
+}:draw_lock_pick;
+
+5.R:#{;.Q} :pin_target_heights;
+5.R:#{;1} :pin_current_heights;
+5.R:#{;.Q} :pin_widths;
+pin_widths {.<}/ :max_pin_width;
+5.R:#{;15Q} :pin_spring_forces;
+0.69 :current_resistance;
+{
+	37 69 115 1 _canvas.id :{graphics.set_color_alpha}
+	297 327 156 31 9 :& 1 _canvas.id :{graphics.round_rect}
+	74 123 157 1 _canvas.id :{graphics.set_color_alpha}
+	300 330 (150 current_resistance*) 25 5 :& 1 _canvas.id :{graphics.round_rect}
+}:draw_resistance
+
+{new_pin_index,
+	new_pin_index key_pin_centers_x E 1-.> 0.< :current_pin_index;
+	key_pin_centers_x.[current_pin_index] pick_head_center_x- pick_position.:[0];
+	1 pin_current_heights.[current_pin_index]- :24* pick_position.:[1];
+	
+	pin_spring_forces.[current_pin_index] 100/ :current_resistance;
+	pin_current_heights.[current_pin_index] pin_target_heights.[current_pin_index] > {
+		pin_widths.[current_pin_index] :pin_width;
+		pin_width (max_pin_width pin_width- 3*)- 0.< current_resistance.< :current_resistance;
+	}?
+}:update_pick_position;
+0 update_pick_position
+
+{
+	pin_current_heights.[current_pin_index] pin_target_heights.[current_pin_index] > :was_below_shearline;
+	pin_current_heights.[current_pin_index] (dt 0.1*)- 0.< :pin_height pin_current_heights.:[current_pin_index];
+	pin_height pin_target_heights.[current_pin_index] > :is_below_shearline;
+	
+	pin_widths.[current_pin_index] :pin_width;
+	
+	pin_spring_forces.[current_pin_index] 100/ :current_resistance;
+	is_below_shearline {
+		pin_width (max_pin_width pin_width- 3*)- 0.< current_resistance.< :current_resistance;
+	}?
+	1 pin_current_heights.[current_pin_index]- :24* pick_position.:[1];
+	
+	(pin_width 0.01+ max_pin_width :>) (was_below_shearline is_below_shearline =!) & {
+		"*click*" 200Q 750 write_alert
+		check_level_complete
+	}?
+	
+	(was_below_shearline is_below_shearline =!) {
+		0: max_pin_width;
+		5.R:#{i,
+			pin_current_heights.[i] pin_target_heights.[i] > {
+				max_pin_width pin_widths.[i] .< :max_pin_width;
+			}?
+		}
+	}?
+}:lift_pick;
+
+{
+	pin_widths {.<}/ :max_pin_width;
+	5.R:#{;1} :pin_current_heights;
+	current_pin_index update_pick_position
+}:restart;
+
+{
+	1: all_pins_done;
+	easy_mode {0.05} {0.035} .? :threshold;
+	5.R:#{i,
+		pin_current_heights.[i] pin_target_heights.[i] - .| $ threshold > { 0: all_pins_done; } ?
+	} " = deltas abs"+:P
+	all_pins_done {0 :level_incomplete;}?
+}:check_level_complete;
+
+{,
+	{ lift_pick } :"UP";
+}:key_map;
+
+class key_listener
+	def key_listener::__init__ {key_name::str action::block self,
+		0 self.:is_pressed;
+		key_name self.:key_name;
+		action.` self.:action;
+	}
+	
+	def key_listener::update {pressed_key_names::list self,
+		pressed_key_names self.key_name N 0 < {
+			0 self.:is_pressed;
+		}{
+			self.is_pressed ! { self.action }?
+			1 self.:is_pressed;
+		}.?
+	}
+[
+	"LEFT" {current_pin_index 1- update_pick_position} key_listener!
+	"RIGHT" {current_pin_index 1+ update_pick_position} key_listener!
+]:key_listeners;
+
+{
+	alert_timeout_ms 0 :> {
+		alert_timeout_ms dt_ms - :alert_timeout_ms;
+		alert_timeout_ms 0 < {
+			clear_alert
+		}?
+	}?
+
+	draw_background
+	easy_mode {
+		(0 0 draw_lock_body) (draw_keyway) (pick_position~ draw_lock_pick)
+	} {
+		(pick_position~ draw_lock_pick) (0 0 draw_lock_body)
+	}.?
+	draw_resistance
+	_canvas.show
+
+	_canvas.id :{graphics.click_events} ui.check_buttons
+
+	[] :key_names;
+	_canvas.id :{graphics.pressed_keys} :& E 0> {keys,
+		keys :# {key,
+			key.key_name key_names .B;
+			key_map key.key_name {}.I~
+		};
+	}{;}.?
+	key_listeners :# {listener, key_names listener.update};
+	
+	dt_ms:Z
+	_canvas.isopen level_incomplete &
+}W 
+
+_canvas.isopen {_canvas.show 1000:Z}?
+
+}:single_pin_picking;
+export ::single_pin_picking

@@ -1,0 +1,34 @@
+{
+
+.{
+	Game End Screen
+.}
+
+30 26 43 1 _canvas.id :{graphics.set_color_alpha} .# ui background
+0 0 canvas_width canvas_height 1 _canvas.id :{graphics.rect}
+0 0 canvas_height canvas_width _canvas interactive_ui! :ui;
+
+{,40:size; 125:r; 99:g; 44:b;}ui_style! ui.set_header_style
+"Game Complete!" 142 122 ui.header
+
+{,40:size; 249:r; 220:g; 92:b;}ui_style! ui.set_header_style
+"Game Complete!" 140 120 ui.header
+
+"I was hoping for more, but I'm not disappointed either" 125 190 ui.text
+
+"If you enjoyed this, why not" 215 265 ui.text
+{,23:size;}ui_style! 0 0 ui.set_button_style
+"Play Again" 10 :3 230 285 140 45 10 {event, 0:awaiting_play_again;} ui.button
+
+_canvas.show
+
+1:awaiting_play_again;
+{
+	_canvas.id :{graphics.click_events} ui.check_buttons
+	dt_ms:Z
+	_canvas.isopen awaiting_play_again &
+}W
+30:Z
+
+}:game_end;
+export ::game_end
